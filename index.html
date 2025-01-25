@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Calls App</title>
+    <style>
+        video {
+            width: 300px;
+            height: 200px;
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <h1>P2P Calls App</h1>
+    <div>
+        <h2>Local Video</h2>
+        <video id="localVideo" autoplay muted></video>
+    </div>
+    <div>
+        <h2>Remote Video</h2>
+        <video id="remoteVideo" autoplay></video>
+    </div>
+    <button onclick="startCall()">Start Call</button>
+    <button onclick="endCall()">End Call</button>
+    <script src="app.js"></script>
+</body>
+</html>
