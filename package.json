@@ -1,0 +1,9 @@
+{
+  "name": "p2p-calls-app",
+  "version": "1.0.0",
+  "description": "Simple peer-to-peer chat and calls app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

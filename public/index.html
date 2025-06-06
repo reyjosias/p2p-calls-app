@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>P2P Calls App</title>
+  <style>
+    body { font-family: sans-serif; margin: 20px; }
+    #users { list-style: none; padding: 0; }
+    #users li { margin: 5px 0; }
+  </style>
+</head>
+<body>
+  <h1>P2P Chat & Calls</h1>
+  <div id="login">
+    <input id="name" placeholder="Enter your name">
+    <button id="join">Join</button>
+  </div>
+  <div id="app" style="display:none;">
+    <p>Logged in as <span id="me"></span></p>
+    <ul id="users"></ul>
+    <input id="message" placeholder="Message">
+    <button id="send">Send Message</button>
+    <div>
+      <video id="localVideo" autoplay muted playsinline></video>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+  </div>
+  <script>
+    const socket = new WebSocket(`ws://${location.host}`);
+    let peer;
+    let currentPeerId;
+    let socketId = null;
+
+    function send(data) {
+      socket.send(JSON.stringify(data));
+    }
+
+    document.getElementById('join').onclick = () => {
+      const name = document.getElementById('name').value.trim();
+      if (!name) return;
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('me').textContent = '@' + name;
+      send({ type: 'register', name });
+    };
+
+    document.getElementById('send').onclick = () => {
+      const msg = document.getElementById('message').value;
+      send({ type: 'send-message', text: msg });
+      document.getElementById('message').value = '';
+    };
+
+    socket.addEventListener('message', e => {
+      const data = JSON.parse(e.data);
+      if (data.type === 'welcome') {
+        socketId = data.id;
+      } else if (data.type === 'users') {
+        const list = data.list;
+        const ul = document.getElementById('users');
+        ul.innerHTML = '';
+        list.forEach(([id, name]) => {
+          const li = document.createElement('li');
+          li.textContent = name + (id === socketId ? ' (you)' : '');
+          if (id !== socketId) {
+            const btn = document.createElement('button');
+            btn.textContent = 'Call';
+            btn.onclick = () => startCall(id);
+            li.appendChild(btn);
+          }
+          ul.appendChild(li);
+        });
+      } else if (data.type === 'message') {
+        console.log(`${data.from}: ${data.text}`);
+      } else if (data.type === 'call-made') {
+        handleCallMade(data);
+      } else if (data.type === 'answer-made') {
+        handleAnswerMade(data);
+      }
+    });
+
+    async function startCall(id) {
+      currentPeerId = id;
+      peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      peer.onicecandidate = e => {
+        if (e.candidate) return;
+        send({ type: 'call-user', to: id, offer: peer.localDescription });
+      };
+      peer.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById('localVideo').srcObject = stream;
+      stream.getTracks().forEach(t => peer.addTrack(t, stream));
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+    }
+
+    async function handleCallMade(data) {
+      currentPeerId = data.from;
+      peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      peer.onicecandidate = e => {
+        if (e.candidate) return;
+        send({ type: 'make-answer', to: data.from, answer: peer.localDescription });
+      };
+      peer.ontrack = e => document.getElementById('remoteVideo').srcObject = e.streams[0];
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      document.getElementById('localVideo').srcObject = stream;
+      stream.getTracks().forEach(t => peer.addTrack(t, stream));
+      await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+    }
+
+    async function handleAnswerMade(data) {
+      await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+    }
+  </script>
+</body>
+</html>
