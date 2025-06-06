@@ -73,6 +73,11 @@ function handleMessage(id, msg) {
       if (target) send(target.socket, { type: 'answer-made', from: id, answer: data.answer });
       break;
     }
+    case 'end-call': {
+      const target = clients.get(data.to);
+      if (target) send(target.socket, { type: 'call-ended', from: id });
+      break;
+    }
   }
 }
 

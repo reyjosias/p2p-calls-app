@@ -7,6 +7,8 @@
     body { font-family: sans-serif; margin: 20px; }
     #users { list-style: none; padding: 0; }
     #users li { margin: 5px 0; }
+    #chat { border: 1px solid #ccc; padding: 10px; height: 200px; overflow-y: auto; }
+    #chat li { margin: 2px 0; }
   </style>
 </head>
 <body>
@@ -18,18 +20,20 @@
   <div id="app" style="display:none;">
     <p>Logged in as <span id="me"></span></p>
     <ul id="users"></ul>
+    <ul id="chat"></ul>
     <input id="message" placeholder="Message">
     <button id="send">Send Message</button>
     <div>
       <video id="localVideo" autoplay muted playsinline></video>
       <video id="remoteVideo" autoplay playsinline></video>
+      <button id="hangup" style="display:none;">Hang Up</button>
     </div>
   </div>
   <script>
-    const socket = new WebSocket(`ws://${location.host}`);
-    let peer;
-    let currentPeerId;
-    let socketId = null;
+  const socket = new WebSocket(`ws://${location.host}`);
+  let peer;
+  let currentPeerId;
+  let socketId = null;
 
     function send(data) {
       socket.send(JSON.stringify(data));
@@ -44,11 +48,21 @@
       send({ type: 'register', name });
     };
 
-    document.getElementById('send').onclick = () => {
-      const msg = document.getElementById('message').value;
-      send({ type: 'send-message', text: msg });
-      document.getElementById('message').value = '';
-    };
+  document.getElementById('send').onclick = () => {
+    const msg = document.getElementById('message').value;
+    send({ type: 'send-message', text: msg });
+    document.getElementById('message').value = '';
+  };
+
+  document.getElementById('hangup').onclick = () => {
+    if (!peer) return;
+    peer.close();
+    send({ type: 'end-call', to: currentPeerId });
+    document.getElementById('hangup').style.display = 'none';
+    document.getElementById('remoteVideo').srcObject = null;
+    currentPeerId = null;
+    peer = null;
+  };
 
     socket.addEventListener('message', e => {
       const data = JSON.parse(e.data);
@@ -70,17 +84,25 @@
           ul.appendChild(li);
         });
       } else if (data.type === 'message') {
-        console.log(`${data.from}: ${data.text}`);
+        const li = document.createElement('li');
+        li.textContent = `${data.from}: ${data.text}`;
+        document.getElementById('chat').appendChild(li);
+        document.getElementById('chat').scrollTop = document.getElementById('chat').scrollHeight;
       } else if (data.type === 'call-made') {
         handleCallMade(data);
       } else if (data.type === 'answer-made') {
         handleAnswerMade(data);
+      } else if (data.type === 'call-ended') {
+        if (peer) peer.close();
+        document.getElementById('hangup').style.display = 'none';
+        document.getElementById('remoteVideo').srcObject = null;
+        peer = null;
       }
     });
 
-    async function startCall(id) {
-      currentPeerId = id;
-      peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  async function startCall(id) {
+    currentPeerId = id;
+    peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       peer.onicecandidate = e => {
         if (e.candidate) return;
         send({ type: 'call-user', to: id, offer: peer.localDescription });
@@ -91,6 +113,7 @@
       stream.getTracks().forEach(t => peer.addTrack(t, stream));
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
+      document.getElementById('hangup').style.display = 'inline';
     }
 
     async function handleCallMade(data) {
@@ -107,6 +130,7 @@
       await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
       const answer = await peer.createAnswer();
       await peer.setLocalDescription(answer);
+      document.getElementById('hangup').style.display = 'inline';
     }
 
     async function handleAnswerMade(data) {
